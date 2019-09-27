@@ -70,7 +70,7 @@ def similar3(array, sufix):
     save(order, pairs, T, "results/triple_pairs_" + str(sufix) +".txt")
 
 def savedouble():
-    filename = "results/99.npy"
+    filename = "9.npy"
     array = np.load(filename)
     
     row_dict = {}
@@ -174,8 +174,10 @@ def merge4():
 
 if __name__ == "__main__":
     #savedouble()   
-    #similiar4partial(0, 1000)
-    merge4()
+    #similiar4(0, 1000)
+    #merge4()
+    filename = "9.npy"
+    array = np.load(filename)
     exit()
 
     if len(sys.argv) != 3:

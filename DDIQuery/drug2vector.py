@@ -1,12 +1,15 @@
-import scipy.io as io
 import numpy as np
+import scipy.io as io
 import torch 
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from sklearn.linear_model import LinearRegression
+from sklearn import metrics
 from datetime import datetime
 from batch import *
+import sys
+import matplotlib.pyplot as plt
 
 
 class Net(nn.Module):
@@ -44,7 +47,6 @@ def enrichment(order, labels):
         bins[i] += bins[i-1]
     return sum(bins) / bins.shape[0] / count
 
-
 def updateweight(target, train_feat, test_feat, train_ids, test_ids):
     reg = LinearRegression()
     train_target = target[train_ids]
@@ -60,7 +62,7 @@ def updateweight(target, train_feat, test_feat, train_ids, test_ids):
 
 if __name__ == "__main__":
     radius = 1
-    epoch = 10
+    epoch = 20
     train_repos, test_repos = loadwholedata(radius)
     onehot_size = train_repos.onehot_size
     embed_size = 100
@@ -93,10 +95,21 @@ if __name__ == "__main__":
         loss = criterion(log_softmax, test_output_seq)
 
         out = log_softmax.data.numpy()
-        labels = test_output_seq.data.numpy()
-        order = np.flip(out.argsort(axis=1), axis=1)
+        labels = test_output_onehot.data.numpy()
+        #order = np.flip(out.argsort(axis=1), axis=1)
         print(loss)
-        print(i, enrichment(order, labels))
+        auc = metrics.roc_auc_score(labels.flatten(), out.flatten())
+        print(i, auc)
+
+        if i == epoch - 1:
+            fpr, tpr, threshold = metrics.roc_curve(labels.flatten(), out.flatten())
+            plt.plot(fpr, tpr, label='ROC curve (area = %0.3f)' % auc)
+            plt.title('ROC')
+            plt.xlabel('False Positive Rate')
+            plt.ylabel('True Positive Rate')
+            plt.legend(loc='lower right')
+            plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+            plt.savefig('ROC.png')
         
         train_repos.reset()
 
