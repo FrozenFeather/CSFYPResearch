@@ -15,11 +15,11 @@ class Repository():
         self.input_feat = drug_feat[input_ids]
         self.output_feat = drug_feat[output_ids]
 
-        rows, cols = np.where(self.adjcent_matrix == 1)
-        self.positions = np.array([x for x in zip(rows, cols)])
+        self.length = self.adjcent_matrix.shape[0]
+
+        self.positions = np.arange(self.length)
         np.random.shuffle(self.positions)
 
-        self.length = self.positions.shape[0]
         self.offset = 0
         self.Epoch = True
 
@@ -33,21 +33,13 @@ class Repository():
 
         self.offset += batch_size
 
-        feat_in = self.drug_onehot[posi[:, 0]]
-        feat_out = []
-        length = self.drug_onehot.shape[1]
-        for row, col in posi:
-            if self.adjcent_matrix[row, col] == 1:
-                feat_out.append(self.drug_onehot[col])
-            elif self.adjcent_matrix[row, col] == 0:
-                a = (np.ones(shape=(length)) - self.drug_onehot[col])*10
-                feat_out.append(a)
-        feat_out = np.array(feat_out)
+        feat_in = self.drug_onehot[posi]
+        feat_out = self.adjcent_matrix[posi]
 
 
         return torch.FloatTensor(feat_in), \
                 torch.FloatTensor(feat_out), \
-                torch.LongTensor(posi[:, 1])
+                torch.LongTensor(posi)
 
     def reset(self):
         self.offset = 0

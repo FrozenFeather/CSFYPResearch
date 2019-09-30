@@ -62,8 +62,8 @@ def updateweight(target, train_feat, test_feat, train_ids, test_ids):
 
 if __name__ == "__main__":
     radius = 1
-    epoch = 20
-    train_repos, test_repos = loadwholedata(radius)
+    epoch = 100
+    train_repos, test_repos = loadnormaldata(radius)
     onehot_size = train_repos.onehot_size
     embed_size = 100
     
@@ -78,26 +78,29 @@ if __name__ == "__main__":
     
     
     optimizer = optim.Adam(model.parameters())
-    criterion = nn.CrossEntropyLoss() # we can try other loss function later
+    criterion = nn.MSELoss() # we can try other loss function later
 
-    test_input, test_output_onehot, test_output_seq = test_repos.miniBatch(5000)
+    test_input, test_output_onehot, test_output_seq = test_repos.miniBatch(568)
     i = 0
     for i in range(epoch):
         while train_repos.Epoch:
-            train_input, train_output_onehot, train_output_seq = train_repos.miniBatch(100)
+            train_input, train_output_onehot, train_output_seq = train_repos.miniBatch(568)
             optimizer.zero_grad()
             log_softmax, pred, embed = model(train_input)
-            loss = criterion(log_softmax, train_output_seq)
+            #print(pred.shape, pred.dtype)
+            #print(train_output_onehot.shape, train_output_onehot.dtype)
+            loss = criterion(pred.flatten(),
+train_output_onehot.flatten())
             loss.backward()
             optimizer.step()
 
         log_softmax, pred, embed = model(test_input)
-        loss = criterion(log_softmax, test_output_seq)
+        #loss = criterion(log_softmax, test_output_seq)
 
         out = log_softmax.data.numpy()
         labels = test_output_onehot.data.numpy()
         #order = np.flip(out.argsort(axis=1), axis=1)
-        print(loss)
+        #print(loss)
         auc = metrics.roc_auc_score(labels.flatten(), out.flatten())
         print(i, auc)
 
