@@ -158,7 +158,7 @@ def loadblinddata(radius):
 
     train_matrix = dilute(m1, radius)
     
-    onehot = np.identity(adjcent_matrix.shape[0])
+    onehot = np.identity(m1.shape[0])
     feat = f4
 
     return Repository(train_matrix, train_ids, train_ids, onehot, f3), \

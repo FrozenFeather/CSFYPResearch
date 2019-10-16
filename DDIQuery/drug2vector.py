@@ -23,9 +23,10 @@ class Net(nn.Module):
         embed = self.fcA1(x)
 
         pred = self.fcB1(embed)
-
-        log_softmax = F.log_softmax(pred, dim=0)
-        return log_softmax, pred, embed
+        s = nn.Sigmoid()
+        sigmoid = s(pred)
+        #log_softmax = F.log_softmax(pred, dim=0)
+        return sigmoid, pred, embed
 
     def getWeight(self):
         return self.fcA1.weight.data.numpy(), self.fcB1.weight.data.numpy()
@@ -63,9 +64,9 @@ def updateweight(target, train_feat, test_feat, train_ids, test_ids):
 if __name__ == "__main__":
     radius = 1
     epoch = 100
-    train_repos, test_repos = loadnormaldata(radius)
+    train_repos, test_repos = loadblinddata(radius)
     onehot_size = train_repos.onehot_size
-    embed_size = 100
+    embed_size = 180
     
     model = Net(onehot_size, embed_size)
     
@@ -86,26 +87,26 @@ if __name__ == "__main__":
         while train_repos.Epoch:
             train_input, train_output_onehot, train_output_seq = train_repos.miniBatch(568)
             optimizer.zero_grad()
-            log_softmax, pred, embed = model(train_input)
-            #print(pred.shape, pred.dtype)
-            #print(train_output_onehot.shape, train_output_onehot.dtype)
-            loss = criterion(pred.flatten(),
-train_output_onehot.flatten())
+            sigmoid, pred, embed = model(train_input)
+            #print("pred", pred.shape)
+            #print("sig", sigmoid.shape)
+            #print("train", train_output_onehot.shape)#, train_output_onehot.dtype)
+            loss = criterion(pred.flatten(), train_output_onehot.flatten())
             loss.backward()
             optimizer.step()
 
-        log_softmax, pred, embed = model(test_input)
+        sigmoid, pred, embed = model(test_input)
         #loss = criterion(log_softmax, test_output_seq)
 
-        out = log_softmax.data.numpy()
+        out = sigmoid.data.numpy()
         labels = test_output_onehot.data.numpy()
         #order = np.flip(out.argsort(axis=1), axis=1)
-        #print(loss)
-        auc = metrics.roc_auc_score(labels.flatten(), out.flatten())
+        #print(labels.shape, pred.shape)
+        auc = metrics.roc_auc_score(labels.flatten(), pred.data.numpy().flatten())
         print(i, auc)
 
         if i == epoch - 1:
-            fpr, tpr, threshold = metrics.roc_curve(labels.flatten(), out.flatten())
+            fpr, tpr, threshold = metrics.roc_curve(labels.flatten(), pred.data.numpy().flatten())
             plt.plot(fpr, tpr, label='ROC curve (area = %0.3f)' % auc)
             plt.title('ROC')
             plt.xlabel('False Positive Rate')
