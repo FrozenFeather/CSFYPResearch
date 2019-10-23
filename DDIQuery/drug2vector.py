@@ -64,17 +64,17 @@ def updateweight(target, train_feat, test_feat, train_ids, test_ids):
 if __name__ == "__main__":
     radius = 1
     epoch = 100
-    train_repos, test_repos = loadblinddata(radius)
+    train_repos, test_repos = loadnormaldata(radius)
     onehot_size = train_repos.onehot_size
-    embed_size = 180
+    embed_size = 100
     
     model = Net(onehot_size, embed_size)
     
 
     train_ids = test_repos.input_ids
     test_ids = test_repos.output_ids
-    train_feat = test_repos.drug_feat[train_ids]
-    test_feat = test_repos.drug_feat[test_ids]
+    #train_feat = test_repos.drug_feat[train_ids]
+    #test_feat = test_repos.drug_feat[test_ids]
     reg = LinearRegression()
     
     

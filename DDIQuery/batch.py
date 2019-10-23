@@ -12,8 +12,8 @@ class Repository():
         self.input_ids = input_ids
         self.output_ids = output_ids
         self.drug_feat = drug_feat
-        self.input_feat = drug_feat[input_ids]
-        self.output_feat = drug_feat[output_ids]
+        #self.input_feat = drug_feat[input_ids]
+        #self.output_feat = drug_feat[output_ids]
 
         self.length = self.adjcent_matrix.shape[0]
 
@@ -47,13 +47,13 @@ class Repository():
 
 def loadBMCData(filename):
     D = io.loadmat(filename)
-    triple = D["DDI_triple"]
+    #triple = D["DDI_triple"]
     binary = D["DDI_binary"]
-    f_offside = D["offsides_feature"]
-    pca_offside = D["pca_offisides"]
-    f_structure = D["structure_feature"]
-    pca_structure = D["pca_structure"]
-    return binary, triple, f_offside, pca_offside, f_structure, pca_structure
+    #f_offside = D["offsides_feature"]
+    #pca_offside = D["pca_offisides"]
+    #f_structure = D["structure_feature"]
+    #pca_structure = D["pca_structure"]
+    return binary#, triple, f_offside, pca_offside, f_structure, pca_structure
 
 def flat(matrix):
     row, col = np.where(matrix>0)
@@ -106,8 +106,9 @@ def chooseblindtest(adjcent_matrix, ratio):
     return m1, m2, m3, m4, train_ids, test_ids
 
 def loadnormaldata(radius):
-    adjcent_matrix, _, f1, f2, f3, f4 = loadBMCData("data/DDI.mat")
-    
+    #adjcent_matrix, _, f1, f2, f3, f4 = loadBMCData("data/DDI.mat")
+    adjcent_matrix = loadBMCData("data/DDI.mat")
+
     test_posi = choosenormaltest(adjcent_matrix, 0.1)
 
     test_matrix = np.zeros(shape=adjcent_matrix.shape)
@@ -118,7 +119,7 @@ def loadnormaldata(radius):
     train_matrix = erosion(range_matrix, test_posi)
     
     onehot = np.identity(adjcent_matrix.shape[0])
-    feat = f3
+    feat = []#f3
 
     train_in = np.where(train_matrix.sum(axis=1) > 0)
     train_out = np.where(train_matrix.sum(axis=0) > 0)
