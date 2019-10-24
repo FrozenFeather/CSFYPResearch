@@ -63,10 +63,10 @@ def updateweight(target, train_feat, test_feat, train_ids, test_ids):
 
 if __name__ == "__main__":
     radius = 1
-    epoch = 100
+    epoch = 150
     train_repos, test_repos = loadnormaldata(radius)
     onehot_size = train_repos.onehot_size
-    embed_size = 100
+    embed_size = 60
     
     model = Net(onehot_size, embed_size)
     
@@ -98,22 +98,35 @@ if __name__ == "__main__":
         sigmoid, pred, embed = model(test_input)
         #loss = criterion(log_softmax, test_output_seq)
 
-        out = sigmoid.data.numpy()
+        out = pred.data.numpy()
         labels = test_output_onehot.data.numpy()
         #order = np.flip(out.argsort(axis=1), axis=1)
         #print(labels.shape, pred.shape)
-        auc = metrics.roc_auc_score(labels.flatten(), pred.data.numpy().flatten())
-        print(i, auc)
+        auc = metrics.roc_auc_score(labels.flatten(), out.flatten())
+        aupr = metrics.average_precision_score(labels.flatten(), out.flatten())
+        print(i, auc, aupr)
 
         if i == epoch - 1:
             fpr, tpr, threshold = metrics.roc_curve(labels.flatten(), pred.data.numpy().flatten())
+            #prec, rec, threshold = metrics.precision_recall_curve(labels.flatten(), pred.data.numpy().flatten())
             plt.plot(fpr, tpr, label='ROC curve (area = %0.3f)' % auc)
-            plt.title('ROC')
+            #plt.plot(rec, prec, label='PR curve (area = %0.3f)' % aupr)
+            plt.title('Receiver-Operating Curve')
             plt.xlabel('False Positive Rate')
             plt.ylabel('True Positive Rate')
             plt.legend(loc='lower right')
             plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
             plt.savefig('ROC.png')
+            plt.clf()
+            
+            prec, rec, threshold = metrics.precision_recall_curve(labels.flatten(), pred.data.numpy().flatten())
+            plt.plot(rec, prec, label='PR curve (area = %0.3f)' % aupr)
+            plt.title('Precision-Recall Curve')
+            plt.xlabel('Recall')
+            plt.ylabel('Precision')
+            plt.legend(loc='lower right')
+            #plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+            plt.savefig('PRC.png')
         
         train_repos.reset()
 

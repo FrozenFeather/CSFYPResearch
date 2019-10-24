@@ -77,7 +77,7 @@ def dilute(adjcent_matrix, step):
 
 
 def erosion(adjcent_matrix, positions):
-    m  = adjcent_matrix
+    m  = np.copy(adjcent_matrix)
     for row, col in positions:
         m[row, col] = 0
     return m
@@ -109,7 +109,7 @@ def loadnormaldata(radius):
     #adjcent_matrix, _, f1, f2, f3, f4 = loadBMCData("data/DDI.mat")
     adjcent_matrix = loadBMCData("data/DDI.mat")
 
-    test_posi = choosenormaltest(adjcent_matrix, 0.1)
+    test_posi = choosenormaltest(adjcent_matrix, 0.15)
 
     test_matrix = np.zeros(shape=adjcent_matrix.shape)
     for row, col in test_posi:
@@ -126,9 +126,12 @@ def loadnormaldata(radius):
 
     test_in = np.where(test_matrix.sum(axis=1) > 0)
     test_out = np.where(test_matrix.sum(axis=0) > 0)    
+
+    print("original number of 1: " + str(np.where(train_matrix == 1)[0].size))
+    print("test number of 1: " + str(np.where(adjcent_matrix == 1)[0].size))
     
     return Repository(train_matrix, train_in, train_out, onehot, feat), \
-            Repository(test_matrix, test_in, test_out, onehot, feat)
+            Repository(adjcent_matrix, test_in, test_out, onehot, feat)
 
 def loadwholedata(radius):
     adjcent_matrix, _, f1, f2, f3, f4 = loadBMCData("data/DDI.mat")
@@ -151,7 +154,7 @@ def loadwholedata(radius):
     test_out = np.where(test_matrix.sum(axis=0) > 0)    
     
     return Repository(train_matrix, train_in, train_out, onehot, feat), \
-            Repository(test_matrix, test_in, test_out, onehot, feat)
+            Repository(adjcent_matrix, test_in, test_out, onehot, feat)
 
 def loadblinddata(radius):
     adjcent_matrix, _, f1, f2, f3, f4 = loadBMCData("data/DDI.mat")
