@@ -11,6 +11,12 @@ from batch import *
 import sys
 import matplotlib.pyplot as plt
 
+# parameters
+mode = 'blind'     # Mode: 'whole', 'normal', 'blind'
+radius = 1
+epoch = 30
+embed_size = 60
+criterion = nn.MSELoss()
 
 class Net(nn.Module):
     def __init__(self, onehot_size, embed_size):
@@ -25,7 +31,6 @@ class Net(nn.Module):
         pred = self.fcB1(embed)
         s = nn.Sigmoid()
         sigmoid = s(pred)
-        #log_softmax = F.log_softmax(pred, dim=0)
         return sigmoid, pred, embed
 
     def getWeight(self):
@@ -48,38 +53,44 @@ def enrichment(order, labels):
         bins[i] += bins[i-1]
     return sum(bins) / bins.shape[0] / count
 
-def updateweight(target, train_feat, test_feat, train_ids, test_ids):
+def updateweight(target, train_feat, test_feat):
     reg = LinearRegression()
-    train_target = target[train_ids]
-    test_target = target[test_ids]
-    reg.fit(train_feat, train_target)
+    reg.fit(train_feat, target)
     test_pred = reg.predict(test_feat)
+    return test_pred
 
-    for i in range(len(test_ids)):
-        row = test_ids[i]
-        target[row] = test_pred[i]
-    return target
+def export_roc_curve(y_true, y_pred, auc):
+    fpr, tpr, threshold = metrics.roc_curve(y_true, y_pred)
+    plt.plot(fpr, tpr, label='ROC curve (area = %0.3f)' % auc)
+    plt.title('Receiver-Operating Curve')
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.legend(loc='lower right')
+    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+    plt.savefig('ROC.png')
+    plt.clf()
 
+def export_pr_curve(y_true, y_pred, aupr):
+    prec, rec, threshold = metrics.precision_recall_curve(y_true, y_pred)
+    plt.plot(rec, prec, label='PR curve (area = %0.3f)' % aupr)
+    plt.title('Precision-Recall Curve')
+    plt.xlabel('Recall')
+    plt.ylabel('Precision')
+    plt.legend(loc='lower right')
+    plt.savefig('PRC.png')
+    plt.clf()
 
-if __name__ == "__main__":
-    radius = 1
-    epoch = 150
+def load_normal_set():
+
     train_repos, test_repos = loadnormaldata(radius)
     onehot_size = train_repos.onehot_size
-    embed_size = 60
     
     model = Net(onehot_size, embed_size)
     
-
     train_ids = test_repos.input_ids
     test_ids = test_repos.output_ids
-    #train_feat = test_repos.drug_feat[train_ids]
-    #test_feat = test_repos.drug_feat[test_ids]
-    reg = LinearRegression()
-    
     
     optimizer = optim.Adam(model.parameters())
-    criterion = nn.MSELoss() # we can try other loss function later
 
     test_input, test_output_onehot, test_output_seq = test_repos.miniBatch(568)
     i = 0
@@ -88,52 +99,161 @@ if __name__ == "__main__":
             train_input, train_output_onehot, train_output_seq = train_repos.miniBatch(568)
             optimizer.zero_grad()
             sigmoid, pred, embed = model(train_input)
-            #print("pred", pred.shape)
-            #print("sig", sigmoid.shape)
-            #print("train", train_output_onehot.shape)#, train_output_onehot.dtype)
             loss = criterion(pred.flatten(), train_output_onehot.flatten())
             loss.backward()
             optimizer.step()
 
         sigmoid, pred, embed = model(test_input)
-        #loss = criterion(log_softmax, test_output_seq)
 
-        out = pred.data.numpy()
-        labels = test_output_onehot.data.numpy()
-        #order = np.flip(out.argsort(axis=1), axis=1)
-        #print(labels.shape, pred.shape)
-        auc = metrics.roc_auc_score(labels.flatten(), out.flatten())
-        aupr = metrics.average_precision_score(labels.flatten(), out.flatten())
+        out = pred.data.numpy().flatten()
+        labels = test_output_onehot.data.numpy().flatten()
+        auc = metrics.roc_auc_score(labels, out)
+        aupr = metrics.average_precision_score(labels, out)
         print(i, auc, aupr)
 
         if i == epoch - 1:
-            fpr, tpr, threshold = metrics.roc_curve(labels.flatten(), pred.data.numpy().flatten())
-            #prec, rec, threshold = metrics.precision_recall_curve(labels.flatten(), pred.data.numpy().flatten())
-            plt.plot(fpr, tpr, label='ROC curve (area = %0.3f)' % auc)
-            #plt.plot(rec, prec, label='PR curve (area = %0.3f)' % aupr)
-            plt.title('Receiver-Operating Curve')
-            plt.xlabel('False Positive Rate')
-            plt.ylabel('True Positive Rate')
-            plt.legend(loc='lower right')
-            plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
-            plt.savefig('ROC.png')
-            plt.clf()
-            
-            prec, rec, threshold = metrics.precision_recall_curve(labels.flatten(), pred.data.numpy().flatten())
-            plt.plot(rec, prec, label='PR curve (area = %0.3f)' % aupr)
-            plt.title('Precision-Recall Curve')
-            plt.xlabel('Recall')
-            plt.ylabel('Precision')
-            plt.legend(loc='lower right')
-            #plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
-            plt.savefig('PRC.png')
+            export_roc_curve(labels, out, auc)
+            export_pr_curve(labels, out, aupr)
         
         train_repos.reset()
 
         whole_input = torch.FloatTensor(np.identity(onehot_size))
-        log_softmax, pred, embed = model(whole_input)
-        embed = embed.data.numpy()
+        sigmoid, pred, embed = model(whole_input)
         if i%10 == 9:
-            np.save(str(i) + ".npy", embed)
+            np.save(str(i) + ".npy", embed.data.numpy())
             print("saved!")
+
+def load_blind_set():
+
+    train_repos, test_repos = loadblinddata(radius)
+    model = Net(train_repos.onehot_size, embed_size)
+    
+    optimizer = optim.Adam(model.parameters())
+
+    test_input, test_output_onehot = test_repos.miniBatch(568)
+    i = 0
+    for i in range(epoch):
+        for j in range(20):
+            while train_repos.Epoch:
+                train_input, train_output_onehot = train_repos.miniBatch(568)
+                optimizer.zero_grad()
+                sigmoid, pred, embed = model(train_input)
+                loss = criterion(pred.flatten(), train_output_onehot.flatten())
+                loss.backward()
+                optimizer.step()
+
+            train_repos.reset()
+
+        test_model = Net(test_repos.onehot_size, embed_size)
+        u,v = model.getWeight()
+        new_u = updateweight(u.transpose(), test_repos.input_feat, test_repos.drug_feat).transpose()
+
+        tr = test_repos.input_ids
+        te = test_repos.output_ids
+
+        print('size', len(tr)+len(te))
+        # embed_vector = new_u.transpose()
+        embed_vector = np.matmul(test_input.data.numpy(), new_u.transpose())
+        m1 = np.matmul(embed_vector[tr, :], v.transpose())
+        m3 = np.matmul(embed_vector[te, :], v.transpose())
+        m13 = np.matmul(embed_vector, v.transpose())
+        m2 = np.transpose(m3)
+        # m12 = np.zeros((train_repos.onehot_size,test_repos.onehot_size))
+        # m12[:, tr] = m1
+        # m12[:, te] = m2
+        m12 = np.transpose(m13)
+        # print(embed_vector[test_repos.input_ids].shape, m2.shape)
+        reg = LinearRegression()
+        reg.fit(embed_vector[tr, :], m2)
+        # print(reg.score(embed_vector[tr, :], m2))
+        # print(v.shape, reg.coef_.shape)
+        new_v = np.zeros((test_repos.onehot_size, embed_size))
+        # new_v = reg.coef_
+        # m2 = np.matmul(embed_vector[tr,:], new_v[te,:].transpose())
+        # m12 = np.matmul(embed_vector[tr,:], new_v.transpose())
+        new_v[tr, :] = v
+        new_v[te, :] = reg.coef_
+
+        # m1_l = test_output_onehot.data.numpy()[tr,:][:,tr]
+        # auc1 = metrics.roc_auc_score(m1_l.flatten(), m1.flatten())
+        # aupr1 = metrics.average_precision_score(m1_l.flatten(), m1.flatten())
+        # print('m1_t', auc1, aupr1)
+        # m2_l = test_output_onehot.data.numpy()[tr,:][:,te]
+        # auc2 = metrics.roc_auc_score(m2_l.flatten(), m2.flatten())
+        # aupr2 = metrics.average_precision_score(m2_l.flatten(), m2.flatten())
+        # print('m2_t', auc2, aupr2)
+        # m3_l = test_output_onehot.data.numpy()[te,:][:,tr]
+        # auc3 = metrics.roc_auc_score(m3_l.flatten(), m3.flatten())
+        # aupr3 = metrics.average_precision_score(m3_l.flatten(), m3.flatten())
+        # print('m3_t', auc3, aupr3)
+        # m13_l = test_output_onehot.data.numpy()[:,tr]
+        # auc13 = metrics.roc_auc_score(m13_l.flatten(), m13.flatten())
+        # aupr13 = metrics.average_precision_score(m13_l.flatten(), m13.flatten())
+        # print('m13_t', auc13, aupr13)
+        # m12_l = test_output_onehot.data.numpy()[tr,:]
+        # auc12 = metrics.roc_auc_score(m12_l.flatten(), m12.flatten())
+        # aupr12 = metrics.average_precision_score(m12_l.flatten(), m12.flatten())
+        # print('m12_t', auc12, aupr12)
+
+        #new_v = np.linalg.pinv(updateweight(np.linalg.pinv(v).transpose(), test_repos.input_feat, test_repos.drug_feat)).transpose()
+        test_model.setWeight(new_u, new_v)
+
+        # sigmoid, pred, embed = test_model(test_input)
+        sigmoid, pred, embed = test_model(torch.FloatTensor(np.identity(test_repos.onehot_size)))
+        out = pred.data.numpy()
+        # labels = test_output_onehot.data.numpy()
+        labels = test_repos.adjcent_matrix
+
+        # tr = np.sort(test_repos.input_ids)
+        # te = np.sort(test_repos.output_ids)
+
+        print(i)
+        m1_p = out[tr, :][:, tr].flatten()
+        m1_l = labels[tr, :][:, tr].flatten()
+
+        auc1 = metrics.roc_auc_score(m1_l, m1_p)
+        aupr1 = metrics.average_precision_score(m1_l, m1_p)
+        print('tr x tr', auc1, aupr1)
+
+        m2_p = out[tr, :][:, te].flatten()
+        m2_l = labels[tr, :][:, te].flatten()
+
+        auc2 = metrics.roc_auc_score(m2_l, m2_p)
+        aupr2 = metrics.average_precision_score(m2_l, m2_p)
+        print('tr x te', auc2, aupr2)
+
+        m3_p = out[te, :][:, tr].flatten()
+        m3_l = labels[te, :][:, tr].flatten()
+
+        auc3 = metrics.roc_auc_score(m3_l, m3_p)
+        aupr3 = metrics.average_precision_score(m3_l, m3_p)
+        print('te x tr', auc3, aupr3)
+
+        m4_p = out[te, :][:, te].flatten()
+        m4_l = labels[te, :][:, te].flatten()
+
+        auc4 = metrics.roc_auc_score(m4_l, m4_p)
+        aupr4 = metrics.average_precision_score(m4_l, m4_p)
+        print('te x te', auc4, aupr4)
+
+        auc = metrics.roc_auc_score(labels.flatten(), out.flatten())
+        aupr = metrics.average_precision_score(labels.flatten(), out.flatten())
+        print('Overall', auc, aupr)
+        # print(np.where(labels[tr, :][:, te]!=labels[te, :][:, tr].transpose()))
+
+        # if i == epoch - 1:
+        #     export_roc_curve(labels, out, auc)
+        #     export_pr_curve(labels, out, aupr)
         
+        whole_input = torch.FloatTensor(np.identity(test_repos.onehot_size))
+        sigmoid, pred, embed = test_model(whole_input)
+        if i%10 == 9:
+            np.save(str(i) + ".npy", embed.data.numpy())
+            print("saved!")
+
+if __name__ == "__main__":
+    np.random.seed()
+    if mode == 'normal':
+        load_normal_set()
+    elif mode == 'blind':
+        load_blind_set()

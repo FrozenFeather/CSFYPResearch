@@ -3,6 +3,8 @@ import numpy as np
 import torch 
 import networkx as nx
 
+test_ratio = 0.15
+
 class Repository():
     def __init__(self, adjcent_matrix, input_ids, output_ids, drug_onehot, drug_feat):
         self.adjcent_matrix = adjcent_matrix
@@ -12,8 +14,8 @@ class Repository():
         self.input_ids = input_ids
         self.output_ids = output_ids
         self.drug_feat = drug_feat
-        #self.input_feat = drug_feat[input_ids]
-        #self.output_feat = drug_feat[output_ids]
+        self.input_feat = drug_feat[input_ids]
+        self.output_feat = drug_feat[output_ids]
 
         self.length = self.adjcent_matrix.shape[0]
 
@@ -30,6 +32,7 @@ class Repository():
         else:
             posi = self.positions[self.offset : self.length]
             self.Epoch = False
+            np.random.shuffle(self.positions)
 
         self.offset += batch_size
 
@@ -38,8 +41,7 @@ class Repository():
 
 
         return torch.FloatTensor(feat_in), \
-                torch.FloatTensor(feat_out), \
-                torch.LongTensor(posi)
+                torch.FloatTensor(feat_out)
 
     def reset(self):
         self.offset = 0
@@ -51,9 +53,9 @@ def loadBMCData(filename):
     binary = D["DDI_binary"]
     #f_offside = D["offsides_feature"]
     #pca_offside = D["pca_offisides"]
-    #f_structure = D["structure_feature"]
+    f_structure = D["structure_feature"]
     #pca_structure = D["pca_structure"]
-    return binary#, triple, f_offside, pca_offside, f_structure, pca_structure
+    return binary, f_structure#, triple, f_offside, pca_offside, f_structure, pca_structure
 
 def flat(matrix):
     row, col = np.where(matrix>0)
@@ -107,9 +109,9 @@ def chooseblindtest(adjcent_matrix, ratio):
 
 def loadnormaldata(radius):
     #adjcent_matrix, _, f1, f2, f3, f4 = loadBMCData("data/DDI.mat")
-    adjcent_matrix = loadBMCData("data/DDI.mat")
+    adjcent_matrix, f3 = loadBMCData("data/DDI.mat")
 
-    test_posi = choosenormaltest(adjcent_matrix, 0.15)
+    test_posi = choosenormaltest(adjcent_matrix, test_ratio)
 
     test_matrix = np.zeros(shape=adjcent_matrix.shape)
     for row, col in test_posi:
@@ -119,7 +121,7 @@ def loadnormaldata(radius):
     train_matrix = erosion(range_matrix, test_posi)
     
     onehot = np.identity(adjcent_matrix.shape[0])
-    feat = []#f3
+    feat = f3
 
     train_in = np.where(train_matrix.sum(axis=1) > 0)
     train_out = np.where(train_matrix.sum(axis=0) > 0)
@@ -157,16 +159,17 @@ def loadwholedata(radius):
             Repository(adjcent_matrix, test_in, test_out, onehot, feat)
 
 def loadblinddata(radius):
-    adjcent_matrix, _, f1, f2, f3, f4 = loadBMCData("data/DDI.mat")
-    m1, m2, m3, m4, train_ids, test_ids = chooseblindtest(adjcent_matrix, 0.1)
+    # adjcent_matrix, _, f1, f2, f3, f4 = loadBMCData("data/DDI.mat")
+    adjcent_matrix, f3 = loadBMCData("data/DDI.mat")
+    m1, m2, m3, m4, train_ids, test_ids = chooseblindtest(adjcent_matrix, test_ratio)
 
     train_matrix = dilute(m1, radius)
     
-    onehot = np.identity(m1.shape[0])
-    feat = f4
+    train_onehot = np.identity(m1.shape[0])
+    test_onehot = np.identity(adjcent_matrix.shape[0])
 
-    return Repository(train_matrix, train_ids, train_ids, onehot, f3), \
-            Repository(m2, train_ids, test_ids, onehot, f3)
+    return Repository(train_matrix, train_ids, train_ids, train_onehot, f3), \
+            Repository(adjcent_matrix, train_ids, test_ids, test_onehot, f3)
 
 if __name__ == "__main__":
     train, test = loadblinddata(1)
