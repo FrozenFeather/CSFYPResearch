@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression, Ridge
 from sklearn import metrics
 from datetime import datetime
 from batch import *
@@ -16,6 +16,7 @@ mode = 'blind'     # Mode: 'whole', 'normal', 'blind'
 radius = 1
 epoch = 30
 embed_size = 60
+weight_decay = 0.3e-4   # L2 Regularization
 criterion = nn.MSELoss()
 
 class Net(nn.Module):
@@ -54,9 +55,10 @@ def enrichment(order, labels):
     return sum(bins) / bins.shape[0] / count
 
 def updateweight(target, train_feat, test_feat):
-    reg = LinearRegression()
+    reg = Ridge(alpha=1.5)
     reg.fit(train_feat, target)
     test_pred = reg.predict(test_feat)
+    # print('lr score:', reg.score(train_feat, target))
     return test_pred
 
 def export_roc_curve(y_true, y_pred, auc):
@@ -127,8 +129,8 @@ def load_blind_set():
 
     train_repos, test_repos = loadblinddata(radius)
     model = Net(train_repos.onehot_size, embed_size)
-    
-    optimizer = optim.Adam(model.parameters())
+
+    optimizer = optim.Adam(model.parameters(), weight_decay=weight_decay)
 
     test_input, test_output_onehot = test_repos.miniBatch(568)
     i = 0
@@ -138,7 +140,7 @@ def load_blind_set():
                 train_input, train_output_onehot = train_repos.miniBatch(568)
                 optimizer.zero_grad()
                 sigmoid, pred, embed = model(train_input)
-                loss = criterion(pred.flatten(), train_output_onehot.flatten())
+                loss = criterion(sigmoid.flatten(), train_output_onehot.flatten())
                 loss.backward()
                 optimizer.step()
 
@@ -161,11 +163,11 @@ def load_blind_set():
         # m12 = np.zeros((train_repos.onehot_size,test_repos.onehot_size))
         # m12[:, tr] = m1
         # m12[:, te] = m2
-        m12 = np.transpose(m13)
+        # m12 = np.transpose(m13)
         # print(embed_vector[test_repos.input_ids].shape, m2.shape)
-        reg = LinearRegression()
+        reg = Ridge(alpha=1e-3)
         reg.fit(embed_vector[tr, :], m2)
-        # print(reg.score(embed_vector[tr, :], m2))
+        print(reg.score(embed_vector[tr, :], m2))
         # print(v.shape, reg.coef_.shape)
         new_v = np.zeros((test_repos.onehot_size, embed_size))
         # new_v = reg.coef_
@@ -200,7 +202,7 @@ def load_blind_set():
 
         # sigmoid, pred, embed = test_model(test_input)
         sigmoid, pred, embed = test_model(torch.FloatTensor(np.identity(test_repos.onehot_size)))
-        out = pred.data.numpy()
+        out = sigmoid.data.numpy()
         # labels = test_output_onehot.data.numpy()
         labels = test_repos.adjcent_matrix
 
@@ -245,11 +247,11 @@ def load_blind_set():
         #     export_roc_curve(labels, out, auc)
         #     export_pr_curve(labels, out, aupr)
         
-        whole_input = torch.FloatTensor(np.identity(test_repos.onehot_size))
-        sigmoid, pred, embed = test_model(whole_input)
-        if i%10 == 9:
-            np.save(str(i) + ".npy", embed.data.numpy())
-            print("saved!")
+        # whole_input = torch.FloatTensor(np.identity(test_repos.onehot_size))
+        # sigmoid, pred, embed = test_model(whole_input)
+        # if i%10 == 9:
+        #     np.save(str(i) + ".npy", embed.data.numpy())
+        #     print("saved!")
 
 if __name__ == "__main__":
     np.random.seed()

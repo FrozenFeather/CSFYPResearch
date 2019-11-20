@@ -49,13 +49,13 @@ class Repository():
 
 def loadBMCData(filename):
     D = io.loadmat(filename)
-    #triple = D["DDI_triple"]
+    triple = D["DDI_triple"]
     binary = D["DDI_binary"]
-    #f_offside = D["offsides_feature"]
-    #pca_offside = D["pca_offisides"]
+    f_offside = D["offsides_feature"]
+    pca_offside = D["pca_offisides"]
     f_structure = D["structure_feature"]
-    #pca_structure = D["pca_structure"]
-    return binary, f_structure#, triple, f_offside, pca_offside, f_structure, pca_structure
+    pca_structure = D["pca_structure"]
+    return binary, triple, f_offside, pca_offside, f_structure, pca_structure
 
 def flat(matrix):
     row, col = np.where(matrix>0)
@@ -108,8 +108,8 @@ def chooseblindtest(adjcent_matrix, ratio):
     return m1, m2, m3, m4, train_ids, test_ids
 
 def loadnormaldata(radius):
-    #adjcent_matrix, _, f1, f2, f3, f4 = loadBMCData("data/DDI.mat")
-    adjcent_matrix, f3 = loadBMCData("data/DDI.mat")
+    adjcent_matrix, _, f1, f2, f3, f4 = loadBMCData("data/DDI.mat")
+    # adjcent_matrix, f3 = loadBMCData("data/DDI.mat")
 
     test_posi = choosenormaltest(adjcent_matrix, test_ratio)
 
@@ -159,8 +159,8 @@ def loadwholedata(radius):
             Repository(adjcent_matrix, test_in, test_out, onehot, feat)
 
 def loadblinddata(radius):
-    # adjcent_matrix, _, f1, f2, f3, f4 = loadBMCData("data/DDI.mat")
-    adjcent_matrix, f3 = loadBMCData("data/DDI.mat")
+    adjcent_matrix, _, f1, f2, f3, f4 = loadBMCData("data/DDI.mat")
+    # adjcent_matrix, f3 = loadBMCData("data/DDI.mat")
     m1, m2, m3, m4, train_ids, test_ids = chooseblindtest(adjcent_matrix, test_ratio)
 
     train_matrix = dilute(m1, radius)
@@ -168,8 +168,8 @@ def loadblinddata(radius):
     train_onehot = np.identity(m1.shape[0])
     test_onehot = np.identity(adjcent_matrix.shape[0])
 
-    return Repository(train_matrix, train_ids, train_ids, train_onehot, f3), \
-            Repository(adjcent_matrix, train_ids, test_ids, test_onehot, f3)
+    return Repository(train_matrix, train_ids, train_ids, train_onehot, np.hstack((f2,f4))), \
+            Repository(adjcent_matrix, train_ids, test_ids, test_onehot, np.hstack((f2,f4)))
 
 if __name__ == "__main__":
     train, test = loadblinddata(1)
