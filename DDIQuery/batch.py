@@ -2,6 +2,7 @@ import scipy.io as io
 import numpy as np
 import torch 
 import networkx as nx
+from sklearn.model_selection import KFold
 
 test_ratio = 0.15
 
@@ -46,6 +47,15 @@ class Repository():
     def reset(self):
         self.offset = 0
         self.Epoch = True
+
+class BlindBatch():
+	def __init__(self, adjcent_matrix, k):
+		size = adjcent_matrix.shape[0]
+		index = np.arange(size)
+		kf = KFold(n_splits=k)
+		for train_index, test_index in kf.split(index):
+			chooseblindtest(adjcent_matrix, train_ids, test_ids)
+	
 
 def loadBMCData(filename):
     D = io.loadmat(filename)
