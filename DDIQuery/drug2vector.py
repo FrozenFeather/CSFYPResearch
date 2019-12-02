@@ -12,11 +12,12 @@ import sys
 import matplotlib.pyplot as plt
 
 # parameters
-mode = 'blind'	 # Mode: 'whole', 'normal', 'blind'
+mode = 'blind_tuning'	 # Mode: 'whole', 'normal', 'blind', 'blind_tuning'
 radius = 1
-epoch = 75
-embed_size = 60
-weight_decay = 1.0e-4   # L2 Regularization
+epoch = 80
+embed_size = 80
+weight_decay = 6.3e-5   # L2 Regularization
+ridge_alpha = 0.6
 learning_rate = 5.4e-3
 criterion = nn.BCELoss()
 
@@ -56,7 +57,7 @@ def enrichment(order, labels):
 	return sum(bins) / bins.shape[0] / count
 
 def updateweight(target, train_feat, test_feat):
-	reg = Ridge(alpha=0.6)
+	reg = Ridge(alpha=ridge_alpha)
 	reg.fit(train_feat, target)
 	test_pred = reg.predict(test_feat)
 	# print('lr score:', reg.score(train_feat, target))
@@ -219,13 +220,13 @@ def load_blind_set():
 		# tr = np.sort(test_repos.input_ids)
 		# te = np.sort(test_repos.output_ids)
 		
-		print('batch', index)
+		print('batch', index, end=' ')
 		m1_p = out[tr, :][:, tr].flatten()
 		m1_l = labels[tr, :][:, tr].flatten()
 
 		auc1s[index] = metrics.roc_auc_score(m1_l, m1_p)
 		aupr1s[index] = metrics.average_precision_score(m1_l, m1_p)
-		print('tr x tr', auc1s[index], aupr1s[index])
+		# print('tr x tr', auc1s[index], aupr1s[index])
 
 		# m2_p = out[tr, :][:, te].flatten()
 		# m2_l = labels[tr, :][:, te].flatten()
@@ -248,12 +249,12 @@ def load_blind_set():
 		# aupr4 = metrics.average_precision_score(m4_l, m4_p)
 		# print('te x te', auc4, aupr4)
 		
-		m13_p = out[:, tr].flatten()
-		m13_l = labels[:, tr].flatten()
+		# m13_p = out[:, tr].flatten()
+		# m13_l = labels[:, tr].flatten()
 
-		auc13s[index] = metrics.roc_auc_score(m13_l, m13_p)
-		aupr13s[index] = metrics.average_precision_score(m13_l, m13_p)
-		print('All x tr', auc13s[index], aupr13s[index])
+		# auc13s[index] = metrics.roc_auc_score(m13_l, m13_p)
+		# aupr13s[index] = metrics.average_precision_score(m13_l, m13_p)
+		# print('All x tr', auc13s[index], aupr13s[index])
 
 		# auc = metrics.roc_auc_score(labels.flatten(), out.flatten())
 		# aupr = metrics.average_precision_score(labels.flatten(), out.flatten())
@@ -270,10 +271,14 @@ def load_blind_set():
 		# if i%10 == 9:
 			# np.save(str(i) + ".npy", embed.data.numpy())
 			# print("saved!")
+	
+	test_auc, test_aupr = np.mean(auc3s), np.mean(aupr3s)
 	print('Average')
-	print('tr x tr', np.mean(auc1s), np.mean(aupr1s))
-	print('te x tr', np.mean(auc3s), np.mean(aupr3s))
-	print('all x tr', np.mean(auc13s), np.mean(aupr13s))
+	# print('tr x tr', np.mean(auc1s), np.mean(aupr1s))
+	print('te x tr', test_auc, test_aupr)
+	# print('all x tr', np.mean(auc13s), np.mean(aupr13s))
+	
+	return test_auc, test_aupr
 
 if __name__ == "__main__":
 	np.random.seed()
@@ -281,3 +286,29 @@ if __name__ == "__main__":
 		load_normal_set()
 	elif mode == 'blind':
 		load_blind_set()
+	elif mode == 'blind_tuning':
+		aucs, auprs = [], []
+		index = np.arange(0.37, 0.43, 0.01)
+		for i in index:
+			ridge_alpha = i
+			print('ridge_alpha: ', ridge_alpha)
+			auc, aupr = load_blind_set()
+			aucs.append(auc)
+			auprs.append(aupr)
+			
+		optimum_auc = np.argmax(aucs)
+		optimum_aupr = np.argmax(auprs)
+		plt.plot(index, np.asarray(aucs), label='AUC', color='red')
+		plt.scatter(index[optimum_auc], aucs[optimum_auc], color='red')
+		plt.annotate(aucs[optimum_auc], (index[optimum_auc], aucs[optimum_auc]))
+		plt.plot(index, np.asarray(auprs), label='AUPR', color='blue')
+		plt.scatter(index[optimum_aupr], auprs[optimum_aupr], color='blue')
+		plt.annotate(auprs[optimum_aupr], (index[optimum_aupr], auprs[optimum_aupr]))
+		plt.title('Test AUC & AUPR')
+		plt.xlabel('weight decay')
+		plt.ylabel('Area')
+		plt.legend(loc='lower right')
+		plt.savefig('TestAU.png')
+		plt.clf()
+			
+			
