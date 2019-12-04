@@ -1,11 +1,16 @@
+################################################################
+#
+# batch.py
+# Produce batch for training
+#
+################################################################
 import scipy.io as io
 import numpy as np
 import torch 
 import networkx as nx
 from sklearn.model_selection import KFold
 
-test_ratio = 0.15
-
+# Repository: Batch management
 class Repository():
 	def __init__(self, adjcent_matrix, input_ids, output_ids, drug_onehot, drug_feat):
 		self.adjcent_matrix = adjcent_matrix
@@ -26,7 +31,7 @@ class Repository():
 		self.offset = 0
 		self.Epoch = True
 
-
+	# Generate batch 
 	def miniBatch(self, batch_size):
 		if self.offset + batch_size <= self.length:
 			posi = self.positions[self.offset : self.offset + batch_size]
@@ -48,6 +53,7 @@ class Repository():
 		self.offset = 0
 		self.Epoch = True
 
+# BlindBatch: Cross validation batch management (For blind mode)
 class BlindBatch():
 	def __init__(self, adjcent_matrix, k, feature_matrix, radius):
 		self.adjcent_matrix = adjcent_matrix
@@ -71,7 +77,7 @@ class BlindBatch():
 			test_repo = Repository(adjcent_matrix, train_ids, test_ids, test_onehot, feature_matrix)
 			self.repos.append({'train': train_repo, 'test': test_repo})
 	
-
+# Load the data file
 def loadBMCData(filename):
 	D = io.loadmat(filename)
 	triple = D["DDI_triple"]
@@ -82,6 +88,7 @@ def loadBMCData(filename):
 	pca_structure = D["pca_structure"]
 	return binary, triple, f_offside, pca_offside, f_structure, pca_structure
 
+# same as np.flatten
 def flat(matrix):
 	row, col = np.where(matrix>0)
 	m  = matrix
@@ -89,6 +96,7 @@ def flat(matrix):
 		m[row[i], col[i]] = 1
 	return m
 
+# Depreciated
 def dilute(adjcent_matrix, step):
 	m = adjcent_matrix + np.identity(adjcent_matrix.shape[0])
 	temp = adjcent_matrix + np.identity(adjcent_matrix.shape[0])
@@ -102,7 +110,7 @@ def dilute(adjcent_matrix, step):
 		temp += m_list[i]
 	return flat(temp) - np.identity(adjcent_matrix.shape[0])
 
-
+# Erode '1's in the adjacent matrix(for normal mode)
 def erosion(adjcent_matrix, positions):
 	m  = np.copy(adjcent_matrix)
 	for row, col in positions:
@@ -129,7 +137,7 @@ def loadnormaldata(radius):
 	adjcent_matrix, _, f1, f2, f3, f4 = loadBMCData("data/DDI.mat")
 	# adjcent_matrix, f3 = loadBMCData("data/DDI.mat")
 
-	test_posi = choosenormaltest(adjcent_matrix, test_ratio)
+	test_posi = choosenormaltest(adjcent_matrix, 0.15)
 
 	test_matrix = np.zeros(shape=adjcent_matrix.shape)
 	for row, col in test_posi:

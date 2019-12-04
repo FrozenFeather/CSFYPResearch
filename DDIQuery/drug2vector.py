@@ -1,3 +1,10 @@
+################################################################
+#
+# drug2vector.py
+# Main program
+# Execute this file to train and evaluate the neural network
+#
+################################################################
 import numpy as np
 import scipy.io as io
 import torch 
@@ -11,16 +18,30 @@ from batch import *
 import sys
 import matplotlib.pyplot as plt
 
-# parameters
-mode = 'blind_tuning'	 # Mode: 'whole', 'normal', 'blind', 'blind_tuning'
+# Parameters
+# Mode: 'whole': Train with the whole adjacent matrix(depreciated)
+#		'normal': Train with the adjacent matrix with some '1's are eroded
+#		'blind': Train with the submatrix of the adjacent matrix (CV enabled)
+#		'blind_tuning': Same as 'blind' except run in different parameters
+# epoch: Number of training epoch
+# folds: Number of folds in cross-validation
+# embed_size: Number of neurons in hidden layer(size of embedded vector)
+# weight_decay: L2 Regularization Factor of the neural network
+# ridge_alpha: L2 Regularization Factor of the linear extrapolation
+# learning_rate: learning_rate of the neural network
+# criterion: Loss function of the neural network
+mode = 'blind_tuning'
 radius = 1
-epoch = 80
+epoch = 80 if mode == 'blind_tuning' else 150
+folds = 10
 embed_size = 80
-weight_decay = 6.3e-5   # L2 Regularization
-ridge_alpha = 0.6
+weight_decay = 6.3e-5
+ridge_alpha = 0.89
 learning_rate = 5.4e-3
 criterion = nn.BCELoss()
 
+# Neural Network
+# Contains 2 linear layer and with sigmoid activation layer
 class Net(nn.Module):
 	def __init__(self, onehot_size, embed_size):
 		super(Net, self).__init__()
@@ -43,6 +64,7 @@ class Net(nn.Module):
 		self.fcA1.weight.data = torch.FloatTensor(a)
 		self.fcB1.weight.data = torch.FloatTensor(b)
 
+# Depreciated evaluation method
 def enrichment(order, labels):
 	bins = np.zeros(shape=(order.shape[1]))
 	count = order.shape[0]
@@ -56,6 +78,7 @@ def enrichment(order, labels):
 		bins[i] += bins[i-1]
 	return sum(bins) / bins.shape[0] / count
 
+# Linear extrapolation of the unknown drugs based on the feature
 def updateweight(target, train_feat, test_feat):
 	reg = Ridge(alpha=ridge_alpha)
 	reg.fit(train_feat, target)
@@ -63,6 +86,7 @@ def updateweight(target, train_feat, test_feat):
 	# print('lr score:', reg.score(train_feat, target))
 	return test_pred
 
+# Evaluation Method: Receiver-Operating Characteristic curve plotting
 def export_roc_curve(y_true, y_pred, auc):
 	fpr, tpr, threshold = metrics.roc_curve(y_true, y_pred)
 	plt.plot(fpr, tpr, label='ROC curve (area = %0.3f)' % auc)
@@ -74,6 +98,7 @@ def export_roc_curve(y_true, y_pred, auc):
 	plt.savefig('ROC.png')
 	plt.clf()
 
+# Evaluation Method: Precision-Recall curve plotting
 def export_pr_curve(y_true, y_pred, aupr):
 	prec, rec, threshold = metrics.precision_recall_curve(y_true, y_pred)
 	plt.plot(rec, prec, label='PR curve (area = %0.3f)' % aupr)
@@ -84,6 +109,7 @@ def export_pr_curve(y_true, y_pred, aupr):
 	plt.savefig('PRC.png')
 	plt.clf()
 
+# Train with the adjacent matrix with some '1's are eroded
 def load_normal_set():
 
 	train_repos, test_repos = loadnormaldata(radius)
@@ -127,15 +153,17 @@ def load_normal_set():
 			np.save(str(i) + ".npy", embed.data.numpy())
 			print("saved!")
 
+			
+#		'blind': Train with the submatrix of the adjacent matrix (CV enabled)
 def load_blind_set():
 
-	batch = loadblinddata(radius, 10)
-	auc1s = np.zeros(10)
-	aupr1s = np.zeros(10)
-	auc3s = np.zeros(10)
-	aupr3s = np.zeros(10)
-	auc13s = np.zeros(10)
-	aupr13s = np.zeros(10)
+	batch = loadblinddata(radius, folds)
+	auc1s = np.zeros(folds)
+	aupr1s = np.zeros(folds)
+	auc3s = np.zeros(folds)
+	aupr3s = np.zeros(folds)
+	auc13s = np.zeros(folds)
+	aupr13s = np.zeros(folds)
 	
 	for index, repos in enumerate(batch.repos):
 		train_repos, test_repos = repos["train"], repos["test"]
@@ -279,7 +307,7 @@ def load_blind_set():
 	# print('all x tr', np.mean(auc13s), np.mean(aupr13s))
 	
 	return test_auc, test_aupr
-
+	
 if __name__ == "__main__":
 	np.random.seed()
 	if mode == 'normal':
@@ -288,7 +316,7 @@ if __name__ == "__main__":
 		load_blind_set()
 	elif mode == 'blind_tuning':
 		aucs, auprs = [], []
-		index = np.arange(0.37, 0.43, 0.01)
+		index = np.arange(0.86, 0.91, 0.01)
 		for i in index:
 			ridge_alpha = i
 			print('ridge_alpha: ', ridge_alpha)
