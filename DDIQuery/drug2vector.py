@@ -30,14 +30,14 @@ import matplotlib.pyplot as plt
 # ridge_alpha: L2 Regularization Factor of the linear extrapolation
 # learning_rate: learning_rate of the neural network
 # criterion: Loss function of the neural network
-mode = 'blind_tuning'
+mode = 'blind'
 radius = 1
-epoch = 80 if mode == 'blind_tuning' else 150
+epoch = 80 if mode == 'blind_tuning' else 750
 folds = 10
 embed_size = 80
 weight_decay = 6.3e-5
 ridge_alpha = 0.89
-learning_rate = 5.4e-3
+learning_rate = 16.4e-3
 criterion = nn.BCELoss()
 
 # Neural Network
@@ -122,20 +122,20 @@ def load_normal_set():
 	
 	optimizer = optim.Adam(model.parameters())
 
-	test_input, test_output_onehot, test_output_seq = test_repos.miniBatch(568)
+	test_input, test_output_onehot = test_repos.miniBatch(568)
 	i = 0
 	for i in range(epoch):
 		while train_repos.Epoch:
-			train_input, train_output_onehot, train_output_seq = train_repos.miniBatch(568)
+			train_input, train_output_onehot = train_repos.miniBatch(568)
 			optimizer.zero_grad()
 			sigmoid, pred, embed = model(train_input)
-			loss = criterion(pred.flatten(), train_output_onehot.flatten())
+			loss = criterion(sigmoid.flatten(), train_output_onehot.flatten())
 			loss.backward()
 			optimizer.step()
 
 		sigmoid, pred, embed = model(test_input)
-
-		out = pred.data.numpy().flatten()
+		
+		out = sigmoid.data.numpy().flatten()
 		labels = test_output_onehot.data.numpy().flatten()
 		auc = metrics.roc_auc_score(labels, out)
 		aupr = metrics.average_precision_score(labels, out)
@@ -153,7 +153,7 @@ def load_normal_set():
 			np.save(str(i) + ".npy", embed.data.numpy())
 			print("saved!")
 
-			
+		
 #		'blind': Train with the submatrix of the adjacent matrix (CV enabled)
 def load_blind_set():
 
