@@ -30,12 +30,13 @@ import matplotlib.pyplot as plt
 # ridge_alpha: L2 Regularization Factor of the linear extrapolation
 # learning_rate: learning_rate of the neural network
 # criterion: Loss function of the neural network
-mode = 'blind'
+mode = 'integrated'
 radius = 1
-epoch = 80 if mode == 'blind_tuning' else 750
+epoch = 80 if mode == 'blind_tuning' else 200
 folds = 10
-embed_size = 80
-weight_decay = 6.3e-5
+embed_size = 120
+# weight_decay = 6.3e-5
+weight_decay = 3.3e-4
 ridge_alpha = 0.89
 learning_rate = 16.4e-3
 criterion = nn.BCELoss()
@@ -46,6 +47,31 @@ class Net(nn.Module):
 	def __init__(self, onehot_size, embed_size):
 		super(Net, self).__init__()
 		self.fcA1 = nn.Linear(onehot_size, embed_size, bias=False)
+
+		self.fcB1 = nn.Linear(embed_size, onehot_size, bias=False)
+
+	def forward(self, x):
+		embed = self.fcA1(x)
+
+		pred = self.fcB1(embed)
+		s = nn.Sigmoid()
+		sigmoid = s(pred)
+		return sigmoid, pred, embed
+
+	def getWeight(self):
+		return self.fcA1.weight.data.numpy(), self.fcB1.weight.data.numpy()
+
+	def setWeight(self, a, b):
+		self.fcA1.weight.data = torch.FloatTensor(a)
+		self.fcB1.weight.data = torch.FloatTensor(b)
+
+
+# Neural Network
+# Contains 2 linear layer and with sigmoid activation layer
+class IntegratedNet(nn.Module):
+	def __init__(self, feat_size, embed_size, onehot_size):
+		super(IntegratedNet, self).__init__()
+		self.fcA1 = nn.Linear(feat_size, embed_size, bias=False)
 
 		self.fcB1 = nn.Linear(embed_size, onehot_size, bias=False)
 
@@ -248,13 +274,13 @@ def load_blind_set():
 		# tr = np.sort(test_repos.input_ids)
 		# te = np.sort(test_repos.output_ids)
 		
-		print('batch', index, end=' ')
+		print('batch', index)
 		m1_p = out[tr, :][:, tr].flatten()
 		m1_l = labels[tr, :][:, tr].flatten()
 
 		auc1s[index] = metrics.roc_auc_score(m1_l, m1_p)
 		aupr1s[index] = metrics.average_precision_score(m1_l, m1_p)
-		# print('tr x tr', auc1s[index], aupr1s[index])
+		print('tr x tr', auc1s[index], aupr1s[index])
 
 		# m2_p = out[tr, :][:, te].flatten()
 		# m2_l = labels[tr, :][:, te].flatten()
@@ -307,6 +333,95 @@ def load_blind_set():
 	# print('all x tr', np.mean(auc13s), np.mean(aupr13s))
 	
 	return test_auc, test_aupr
+
+def load_integrated_set():
+	batch = loadblinddata(radius, folds)
+	auc1s = np.zeros(folds)
+	aupr1s = np.zeros(folds)
+	auc3s = np.zeros(folds)
+	aupr3s = np.zeros(folds)
+	auc13s = np.zeros(folds)
+	aupr13s = np.zeros(folds)
+	
+	for index, repos in enumerate(batch.repos):
+		train_repos, test_repos = repos["train"], repos["test"]
+		model = IntegratedNet(train_repos.input_feat.shape[1], embed_size,  train_repos.onehot_size)
+
+
+		optimizer = optim.Adam(model.parameters(), weight_decay=weight_decay, lr=learning_rate)
+
+		test_input, test_output_onehot = test_repos.miniBatch(568)
+
+		for i in range(epoch):
+			while train_repos.Epoch:
+				train_input, train_output_onehot = train_repos.miniBatch(568)
+				augmented = torch.FloatTensor(np.single(np.matmul(train_input, train_repos.input_feat)))
+				# print(train_input.shape)
+				optimizer.zero_grad()
+				sigmoid, pred, embed = model(augmented)
+				loss = criterion(sigmoid.flatten(), train_output_onehot.flatten())
+				loss.backward()
+				optimizer.step()
+
+			train_repos.reset()
+
+		
+		# print(test_input.shape)
+		# print(test_repos.input_feat.shape)
+		test_augmented = torch.FloatTensor(np.single(np.matmul(test_input, test_repos.drug_feat)))
+
+		# print(test_output_onehot.shape)
+		sigmoid, pred, embed = model(test_augmented)
+		out = sigmoid.data.numpy()
+		labels = test_output_onehot.data.numpy()
+		# auc = metrics.roc_auc_score(labels, out)
+		# aupr = metrics.average_precision_score(labels, out)
+		# print(i, auc, aupr)
+
+
+		tr = test_repos.input_ids
+		te = test_repos.output_ids
+
+		print('batch', index)
+		# print(out.shape)
+		m1_p = out[tr, :].flatten()
+		m1_l = labels[tr, :][:, tr].flatten()
+
+		auc1s[index] = metrics.roc_auc_score(m1_l, m1_p)
+		aupr1s[index] = metrics.average_precision_score(m1_l, m1_p)
+		print('tr x tr', auc1s[index], aupr1s[index])
+
+		# m2_p = out[tr, :][:, te].flatten()
+		# m2_l = labels[tr, :][:, te].flatten()
+
+		# auc2 = metrics.roc_auc_score(m2_l, m2_p)
+		# aupr2 = metrics.average_precision_score(m2_l, m2_p)
+		# print('tr x te', auc2, aupr2)
+
+		m3_p = out[te, :].flatten()
+		m3_l = labels[te, :][:, tr].flatten()
+
+		auc3s[index] = metrics.roc_auc_score(m3_l, m3_p)
+		aupr3s[index] = metrics.average_precision_score(m3_l, m3_p)
+		print('te x tr', auc3s[index], aupr3s[index])
+
+	test_auc, test_aupr = np.mean(auc3s), np.mean(aupr3s)
+	print('Average')
+	print('tr x tr', np.mean(auc1s), np.mean(aupr1s))
+	print('te x tr', test_auc, test_aupr)
+
+		# if i == epoch - 1:
+		# 	export_roc_curve(labels, out, auc)
+		# 	export_pr_curve(labels, out, aupr)
+
+
+		# whole_input = torch.FloatTensor(np.identity(onehot_size))
+		# sigmoid, pred, embed = model(whole_input)
+		# if i%10 == 9:
+		# 	np.save(str(i) + ".npy", embed.data.numpy())
+		# 	print("saved!")
+
+
 	
 if __name__ == "__main__":
 	np.random.seed()
@@ -338,5 +453,7 @@ if __name__ == "__main__":
 		plt.legend(loc='lower right')
 		plt.savefig('TestAU.png')
 		plt.clf()
+	elif mode == 'integrated':
+		load_integrated_set()
 			
 			
