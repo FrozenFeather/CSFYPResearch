@@ -9,6 +9,23 @@ import numpy as np
 import torch 
 import networkx as nx
 from sklearn.model_selection import KFold
+from similarity_preprocessing import *
+from SNF import SNF
+
+DATASET_TYPE = "DS"
+DS1 = ("data/DS1/drug_drug_matrix.csv", \
+	  ("data/DS1/chem_Jacarrd_sim.csv", "data/DS1/enzyme_Jacarrd_sim.csv",\
+	   "data/DS1/offsideeffect_Jacarrd_sim.csv", "data/DS1/pathway_Jacarrd_sim.csv",\
+	   "data/DS1/sideeffect_Jacarrd_sim.csv", "data/DS1/target_Jacarrd_sim.csv",\
+	   "data/DS1/transporter_Jacarrd_sim.csv"))
+DS2 = ("data/DS2/ddiMatrix.csv", ("data/DS2/simMatrix.csv"))
+DS3_NCRD = ("data/DS3/NCRDInteractionMat.csv", \
+		  ("data/DS3/ATCSimilarityMat.csv", "data/DS3/GOSimilarityMat.csv",\
+		   "data/DS3/SideEffectSimilarityMat.csv", "data/DS3/chemicalSimilarityMat.csv",\
+		   "data/DS3/distSimilarityMat.csv", "data/DS3/ligandSimilarityMat.csv",\
+		   "data/DS3/seqSimilarityMat.csv"))
+
+DATASET_FILENAMES = DS2
 
 # Repository: Batch management
 class Repository():
@@ -76,6 +93,55 @@ class BlindBatch():
 			train_repo = Repository(train_matrix, train_ids, train_ids, train_onehot, feature_matrix)
 			test_repo = Repository(adjcent_matrix, train_ids, test_ids, test_onehot, feature_matrix)
 			self.repos.append({'train': train_repo, 'test': test_repo})
+
+class NDDBatch():
+	def __init__(self, adjcent_matrix, input_ids, output_ids, drug_onehot, sim_matrices):
+		self.adjcent_matrix = adjcent_matrix
+		self.drug_onehot = drug_onehot
+		self.onehot_size = drug_onehot.shape[1]
+		self.similarities = sim_matrices
+		#those four attributes only used in blind test
+		self.input_ids = input_ids
+		self.output_ids = output_ids
+
+		positives_r, positives_c = np.where(self.adjcent_matrix == 1)
+		positives = np.array([x for x in zip(positives_r, positives_c)])
+		negatives_r, negatives_c = np.where(self.adjcent_matrix == 0)
+		negatives = np.array([x for x in zip(negatives_r, negatives_c)])
+
+		self.positions = np.concatenate((positives, negatives))
+		np.random.shuffle(self.positions)
+
+		self.length = self.positions.shape[0]
+		self.offset = 0
+		self.Epoch = True
+
+
+	def miniBatch(self, batch_size):
+		if self.offset + batch_size <= self.length:
+			posi = self.positions[self.offset : self.offset + batch_size]
+		else:
+			posi = self.positions[self.offset : self.length]
+			self.Epoch = False
+
+		self.offset += batch_size
+
+		feat_in = []
+		feat_out = []
+		length = self.drug_onehot.shape[1]
+		for row, col in posi:
+			drugA = self.similarities[row,:]
+			drugB = self.similarities[col,:]
+			joinfeat = np.concatenate((drugA,drugB))
+			feat_in.append(joinfeat)
+			feat_out.append(self.adjcent_matrix[row, col])
+		feat_out = np.array(feat_out)
+
+		return torch.FloatTensor(feat_in), torch.FloatTensor(feat_out)
+
+	def reset(self):
+		self.offset = 0
+		self.Epoch = True
 	
 # Load the data file
 def loadBMCData(filename):
@@ -86,7 +152,28 @@ def loadBMCData(filename):
 	pca_offside = D["pca_offisides"]
 	f_structure = D["structure_feature"]
 	pca_structure = D["pca_structure"]
-	return binary, triple, f_offside, pca_offside, f_structure, pca_structure
+	# return (binary, triple, f_offside, pca_offside, f_structure, pca_structure)
+	return (binary, np.hstack((pca_offside, pca_structure)))
+
+def loadDSData(filenames, include_header = False):
+	ddi_filename, sim_filename = filenames
+	interaction = np.loadtxt(ddi_filename,dtype=str,delimiter=",")[1:,1:].astype(np.uint8)
+	if type(sim_filename) == str:
+		drug_fea = np.loadtxt(sim_filename,dtype=str,delimiter=",")[1:,1:].astype(np.single)
+	else:
+		K = 6
+		t = 3
+		drug_feas = [np.loadtxt(sim_i,dtype=str,delimiter=",").astype(np.single)+0.001 for sim_i in sim_filename]
+		drug_fea = SNF(drug_feas, K, t)
+	
+	return (interaction, drug_fea)
+
+def load_from_dataset():
+	if DATASET_TYPE == 'DS':
+		return loadDSData(DATASET_FILENAMES)
+	else:
+		return loadBMCData(DATASET_FILENAMES)
+
 
 # same as np.flatten
 def flat(matrix):
@@ -132,6 +219,20 @@ def chooseblindtest(adjcent_matrix, train_ids, test_ids):
 	m3 = adjcent_matrix[test_ids, :][:, train_ids]
 	m4 = adjcent_matrix[test_ids, :][:, test_ids]
 	return m1, m2, m3, m4
+
+def chooseNDDtest(adjcent_matrix, ratio):
+	length = adjcent_matrix.shape[0]
+	test_length = int(length * ratio)
+	ids = list(range(length))
+	np.random.shuffle(ids)
+	test_ids = ids[:test_length]
+	train_ids = ids[test_length:]
+	
+	m1 = adjcent_matrix[train_ids, :][:, train_ids]
+	m2 = adjcent_matrix[train_ids, :][:, test_ids]
+	m3 = adjcent_matrix[test_ids, :][:, train_ids]
+	m4 = adjcent_matrix[test_ids, :][:, test_ids]
+	return m1, m2, m3, m4, train_ids, test_ids
 
 def loadnormaldata(radius):
 	adjcent_matrix, _, f1, f2, f3, f4 = loadBMCData("data/DDI.mat")
@@ -185,10 +286,20 @@ def loadwholedata(radius):
 			Repository(adjcent_matrix, test_in, test_out, onehot, feat)
 
 def loadblinddata(radius, no_of_splits):
-	adjcent_matrix, _, f1, f2, f3, f4 = loadBMCData("data/DDI.mat")
-	feature_matrix = np.hstack((f2,f4))
+	adjcent_matrix, feature_matrix = load_from_dataset()
 	batch = BlindBatch(adjcent_matrix, no_of_splits, feature_matrix, radius)
 	return batch
+
+def loadNDDdata():
+	adjcent_matrix, _, f1, f2, f3, f4 = loadBMCData("data/DDI.mat")
+	sim_matrix = gen_similarity_matrices((f1,f3))
+	# sim_matrix = similarity_matrix(np.hstack((f2,f4)))
+	m1, m2, m3, m4, train_ids, test_ids = chooseNDDtest(adjcent_matrix, 0.1)
+	
+	onehot = np.identity(adjcent_matrix.shape[0])
+
+	return NDDBatch(m1, train_ids, train_ids, onehot, sim_matrix), \
+			NDDBatch(adjcent_matrix, train_ids, test_ids, onehot, sim_matrix)
 
 if __name__ == "__main__":
 	train, test = loadblinddata(1)

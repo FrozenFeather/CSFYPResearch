@@ -30,15 +30,15 @@ import matplotlib.pyplot as plt
 # ridge_alpha: L2 Regularization Factor of the linear extrapolation
 # learning_rate: learning_rate of the neural network
 # criterion: Loss function of the neural network
-mode = 'integrated'
+mode = 'blind'
 radius = 1
 epoch = 80 if mode == 'blind_tuning' else 200
 folds = 10
 embed_size = 120
-# weight_decay = 6.3e-5
-weight_decay = 3.3e-4
-ridge_alpha = 0.89
-learning_rate = 16.4e-3
+weight_decay = 8e-5
+# weight_decay = 3.5e-4
+ridge_alpha = 1.2
+learning_rate = 1.2e-2
 criterion = nn.BCELoss()
 
 # Neural Network
@@ -73,7 +73,7 @@ class IntegratedNet(nn.Module):
 		super(IntegratedNet, self).__init__()
 		self.fcA1 = nn.Linear(feat_size, embed_size, bias=False)
 
-		self.fcB1 = nn.Linear(embed_size, onehot_size, bias=False)
+		self.fcB1 = nn.Linear(embed_size, onehot_size, bias=True)
 
 	def forward(self, x):
 		embed = self.fcA1(x)
@@ -148,11 +148,11 @@ def load_normal_set():
 	
 	optimizer = optim.Adam(model.parameters())
 
-	test_input, test_output_onehot = test_repos.miniBatch(568)
+	test_input, test_output_onehot = test_repos.miniBatch(1000)
 	i = 0
 	for i in range(epoch):
 		while train_repos.Epoch:
-			train_input, train_output_onehot = train_repos.miniBatch(568)
+			train_input, train_output_onehot = train_repos.miniBatch(1000)
 			optimizer.zero_grad()
 			sigmoid, pred, embed = model(train_input)
 			loss = criterion(sigmoid.flatten(), train_output_onehot.flatten())
@@ -197,14 +197,14 @@ def load_blind_set():
 
 		optimizer = optim.Adam(model.parameters(), weight_decay=weight_decay, lr=learning_rate)
 
-		test_input, test_output_onehot = test_repos.miniBatch(568)
+		test_input, test_output_onehot = test_repos.miniBatch(1000)
 
 		for i in range(epoch):
 			while train_repos.Epoch:
-				train_input, train_output_onehot = train_repos.miniBatch(568)
+				train_input, train_output_onehot = train_repos.miniBatch(1000)
 				optimizer.zero_grad()
 				sigmoid, pred, embed = model(train_input)
-				loss = criterion(sigmoid.flatten(), train_output_onehot.flatten())
+				loss = criterion(sigmoid.flatten(), train_output_onehot.flatten() * 3)
 				loss.backward()
 				optimizer.step()
 
@@ -230,9 +230,9 @@ def load_blind_set():
 		# m12 = np.transpose(m13)
 		# print(embed_vector[test_repos.input_ids].shape, m2.shape)
 		# reg = Ridge(alpha=1e-3)
-		reg = LinearRegression()
+		reg = LinearRegression(fit_intercept=False)
 		reg.fit(embed_vector[tr, :], m2)
-		# print(reg.score(embed_vector[tr, :], m2))
+		# print('r2 score: ',reg.score(embed_vector[tr, :], m2))
 		# print(v.shape, reg.coef_.shape)
 		new_v = np.zeros((test_repos.onehot_size, embed_size))
 		# new_v = reg.coef_
@@ -264,6 +264,7 @@ def load_blind_set():
 
 		#new_v = np.linalg.pinv(updateweight(np.linalg.pinv(v).transpose(), test_repos.input_feat, test_repos.drug_feat)).transpose()
 		test_model.setWeight(new_u, new_v)
+		test_model.fcB1.bias
 
 		# sigmoid, pred, embed = test_model(test_input)
 		sigmoid, pred, embed = test_model(torch.FloatTensor(np.identity(test_repos.onehot_size)))
@@ -302,13 +303,6 @@ def load_blind_set():
 		# auc4 = metrics.roc_auc_score(m4_l, m4_p)
 		# aupr4 = metrics.average_precision_score(m4_l, m4_p)
 		# print('te x te', auc4, aupr4)
-		
-		# m13_p = out[:, tr].flatten()
-		# m13_l = labels[:, tr].flatten()
-
-		# auc13s[index] = metrics.roc_auc_score(m13_l, m13_p)
-		# aupr13s[index] = metrics.average_precision_score(m13_l, m13_p)
-		# print('All x tr', auc13s[index], aupr13s[index])
 
 		# auc = metrics.roc_auc_score(labels.flatten(), out.flatten())
 		# aupr = metrics.average_precision_score(labels.flatten(), out.flatten())
@@ -328,7 +322,7 @@ def load_blind_set():
 	
 	test_auc, test_aupr = np.mean(auc3s), np.mean(aupr3s)
 	print('Average')
-	# print('tr x tr', np.mean(auc1s), np.mean(aupr1s))
+	print('tr x tr', np.mean(auc1s), np.mean(aupr1s))
 	print('te x tr', test_auc, test_aupr)
 	# print('all x tr', np.mean(auc13s), np.mean(aupr13s))
 	
@@ -340,8 +334,6 @@ def load_integrated_set():
 	aupr1s = np.zeros(folds)
 	auc3s = np.zeros(folds)
 	aupr3s = np.zeros(folds)
-	auc13s = np.zeros(folds)
-	aupr13s = np.zeros(folds)
 	
 	for index, repos in enumerate(batch.repos):
 		train_repos, test_repos = repos["train"], repos["test"]
@@ -405,6 +397,13 @@ def load_integrated_set():
 		aupr3s[index] = metrics.average_precision_score(m3_l, m3_p)
 		print('te x tr', auc3s[index], aupr3s[index])
 
+		# m4_p = out[te, :][:, te].flatten()
+		# m4_l = labels[te, :][:, te].flatten()
+
+		# auc4 = metrics.roc_auc_score(m4_l, m4_p)
+		# aupr4 = metrics.average_precision_score(m4_l, m4_p)
+		# print('te x te', auc4, aupr4)
+
 	test_auc, test_aupr = np.mean(auc3s), np.mean(aupr3s)
 	print('Average')
 	print('tr x tr', np.mean(auc1s), np.mean(aupr1s))
@@ -422,6 +421,7 @@ def load_integrated_set():
 		# 	print("saved!")
 
 
+
 	
 if __name__ == "__main__":
 	np.random.seed()
@@ -431,16 +431,18 @@ if __name__ == "__main__":
 		load_blind_set()
 	elif mode == 'blind_tuning':
 		aucs, auprs = [], []
-		index = np.arange(0.86, 0.91, 0.01)
+		# index = np.arange(60, 141, 20)
+		index = [8e-6, 8.1e-5, 8.2e-6, 8.3e-5, 8.4e-5, 8.5e-5]
 		for i in index:
-			ridge_alpha = i
-			print('ridge_alpha: ', ridge_alpha)
+			weight_decay = i
+			print('weight_decay: ', weight_decay)
 			auc, aupr = load_blind_set()
 			aucs.append(auc)
 			auprs.append(aupr)
 			
 		optimum_auc = np.argmax(aucs)
 		optimum_aupr = np.argmax(auprs)
+		print('optimum for AUC', index[optimum_auc], 'optimum for AUPR', index[optimum_aupr])
 		plt.plot(index, np.asarray(aucs), label='AUC', color='red')
 		plt.scatter(index[optimum_auc], aucs[optimum_auc], color='red')
 		plt.annotate(aucs[optimum_auc], (index[optimum_auc], aucs[optimum_auc]))
@@ -455,5 +457,6 @@ if __name__ == "__main__":
 		plt.clf()
 	elif mode == 'integrated':
 		load_integrated_set()
+
 			
 			
