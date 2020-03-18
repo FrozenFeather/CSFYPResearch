@@ -246,7 +246,6 @@ def removeRedundancy(ranked_entropy_simType,all_euclideanDist_Sim):
                 iNEnd = len(ranked_entropy_simType)
                 while n < iNEnd:
                         B_simType = ranked_entropy_simType[n]
-
                         if A_simType+','+B_simType in all_euclideanDist_Sim:
                                 key=A_simType+','+B_simType
                         if B_simType+','+A_simType in all_euclideanDist_Sim:

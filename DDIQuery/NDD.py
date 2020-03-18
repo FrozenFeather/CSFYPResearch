@@ -41,28 +41,35 @@ if __name__ == '__main__':
 	aupr13s = np.zeros(folds)
 	
 	# for index, repos in enumerate(batch.repos):
-	train_repos, test_repos = loadNDDdata()
-	model = NDD(train_repos.onehot_size)
+
+	interaction, feature = load_from_dataset()
+	onehot_size = feature.shape[0]
+
+	ndd_batch = NDDBatch(interaction, feature)
+	# train_repos, test_repos = loadNDDdata()
+	model = NDD(onehot_size)
 
 	optimizer = optim.Adam(model.parameters(), weight_decay=weight_decay, lr=learning_rate)
 
 
-	train_input, train_output_onehot = train_repos.miniBatch(568)
 
 	for i in range(epoch):
+		while ndd_batch.Epoch:
 
-		optimizer.zero_grad()
-		pred = model(train_input)
-		loss = criterion(pred.flatten(), train_output_onehot.flatten())
-		loss.backward()
-		optimizer.step()
+			train_input, train_output_onehot = ndd_batch.trainBatch(500)
 
-		train_repos.reset()
+			optimizer.zero_grad()
+			pred = model(train_input)
+			loss = criterion(pred.flatten(), train_output_onehot.flatten())
+			loss.backward()
+			optimizer.step()
+
+		ndd_batch.reset()
 
 	
 	# print(test_input.shape)
 	# print(test_repos.input_feat.shape)
-	test_input, test_output_onehot = test_repos.miniBatch(568)
+	test_input, test_output_onehot = ndd_batch.testBatch(500)
 
 	# print(test_output_onehot.shape)
 	pred = model(test_input)

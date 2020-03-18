@@ -23,6 +23,7 @@ import matplotlib.pyplot as plt
 #		'normal': Train with the adjacent matrix with some '1's are eroded
 #		'blind': Train with the submatrix of the adjacent matrix (CV enabled)
 #		'blind_tuning': Same as 'blind' except run in different parameters
+#		'integrated': Output augmented with drug similarities
 # epoch: Number of training epoch
 # folds: Number of folds in cross-validation
 # embed_size: Number of neurons in hidden layer(size of embedded vector)
@@ -314,10 +315,10 @@ def load_blind_set():
 			# export_roc_curve(labels, out, auc)
 			# export_pr_curve(labels, out, aupr)
 		
-		# whole_input = torch.FloatTensor(np.identity(test_repos.onehot_size))
-		# sigmoid, pred, embed = test_model(whole_input)
+	whole_input = torch.FloatTensor(np.identity(test_repos.onehot_size))
+	sigmoid, pred, embed = test_model(whole_input)
 		# if i%10 == 9:
-			# np.save(str(i) + ".npy", embed.data.numpy())
+	# np.save("DS2.npy", embed.data.numpy())
 			# print("saved!")
 	
 	test_auc, test_aupr = np.mean(auc3s), np.mean(aupr3s)
@@ -414,10 +415,10 @@ def load_integrated_set():
 		# 	export_pr_curve(labels, out, aupr)
 
 
-		# whole_input = torch.FloatTensor(np.identity(onehot_size))
-		# sigmoid, pred, embed = model(whole_input)
+	# whole_input = torch.FloatTensor(np.identity(onehot_size))
+	# sigmoid, pred, embed = model(whole_input)
 		# if i%10 == 9:
-		# 	np.save(str(i) + ".npy", embed.data.numpy())
+	# np.save(".npy", embed.data.numpy())
 		# 	print("saved!")
 
 
