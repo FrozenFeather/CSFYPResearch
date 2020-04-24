@@ -1,12 +1,14 @@
 import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog
+import  time
 
 class Application:
     def __init__(self, root, inputlist, function):
         self.root = root
         self.inputlist = inputlist
         self.root.geometry('600x500')
+        self.root.resizable(0, 0)
         self.root.title("DDI query generator")
         self.function = function
 
@@ -14,6 +16,7 @@ class Application:
         self.labelframe = tk.LabelFrame(self.root, text="Input")
         self.labelframe.pack(side='top', fill="both", expand="yes", ipadx=10, padx=5, pady=5)
 
+        ##############################
         # Original drug list Labelframe
         self.labelframe1a = tk.LabelFrame(self.labelframe, text="Original drug list")
         self.labelframe1a.pack(side='left', fill="both", expand="yes", padx=5, pady=5)
@@ -22,8 +25,6 @@ class Application:
         self.scrollbar.grid(row=0, column=1, rowspan=4, sticky=tk.E + tk.N + tk.S, padx=0)
 
         self.druglist = tk.Listbox(self.labelframe1a, yscrollcommand=self.scrollbar.set, height=6, width=15)
-        # for line in self.inputlist:
-        #     self.druglist.insert("end", str(line))
         self.druglist.grid(row=0, column=0, rowspan=4, sticky=tk.W, padx=(10, 0))
         self.scrollbar.config(command=self.druglist.yview)
 
@@ -38,14 +39,13 @@ class Application:
         self.ClearButton = tk.Button(self.labelframe1a, text="Clear Drug", width=15, command=self.clear_input_drug)
         self.ClearButton.grid(row=3, column=3)
 
-        #Bind event in Original drug list Labelframe
+        # Bind event in Original drug list Labelframe
         self.druglist.bind("<Button-1>", self.normal_delete_button)
         self.druglist.bind("<FocusOut>", self.disable_delete_button)
         self.ClearButton.bind("<Button-1>", self.disable_delete_button)
 
-
-
-        # Original drug list Labelframe
+        #############################
+        # Allergy drug list Labelframe
         self.labelframe1b = tk.LabelFrame(self.labelframe, text="Allergy drug list")
         self.labelframe1b.pack(side='left', fill="both", expand="yes", padx=5, pady=5)
 
@@ -53,8 +53,6 @@ class Application:
         self.scrollbar2.grid(row=0, column=1, rowspan=4, sticky=tk.E + tk.N + tk.S, padx=0)
 
         self.allergylist = tk.Listbox(self.labelframe1b, yscrollcommand=self.scrollbar2.set, height=6, width=15)
-        # for line in self.inputlist:
-        #     self.allergylist.insert("end", str(line))
         self.allergylist.grid(row=0, column=0, rowspan=4, sticky=tk.W, padx=(10, 0))
         self.scrollbar2.config(command=self.allergylist.yview)
 
@@ -70,25 +68,38 @@ class Application:
         self.ClearButton2 = tk.Button(self.labelframe1b, command=self.clear_allergy_drug, text="Clear Drug", width=15)
         self.ClearButton2.grid(row=3, column=3)
 
-        #Bind event in Original drug list Labelframe
+        #Bind event in Allergy drug list Labelframe
         self.allergylist.bind("<Button-1>", self.normal_delete_button2)
         self.allergylist.bind("<FocusOut>", self.disable_delete_button2)
         self.ClearButton2.bind("<Button-1>", self.disable_delete_button2)
 
+        ################################
+        # Parameter Labelframe
         self.labelframe2 = tk.LabelFrame(root, text="Parameter")
         self.labelframe2.pack(side='top', fill="both", expand="yes", ipadx=5, padx=5, pady=5)
 
         self.radioValue = tk.IntVar()
         self.Radiobutton1 = tk.Radiobutton(self.labelframe2, text="Preset Minimun Distance", variable=self.radioValue,value=0)
-        self.Radiobutton1.pack(side="left", padx=5, pady=2)
+        self.Radiobutton1.grid(row=0, column =0, padx=5, pady=2)
         self.Radiobutton1.select()
         self.Radiobutton2 = tk.Radiobutton(self.labelframe2, text="Minimun Distance:", variable=self.radioValue, value=1)
-        self.Radiobutton2.pack(side="left",padx=5, pady=2)
+        self.Radiobutton2.grid(row=0, column =1, padx=5, pady=2)
         self.minDisEntry = tk.Entry(self.labelframe2, state="disable")
-        self.minDisEntry.pack(side="left",pady=2)
+        self.minDisEntry.grid(row=0, column =2, padx=5, pady=2)
         self.Radiobutton1.bind("<Button-1>", self.disable_min_dis_entry)
         self.Radiobutton2.bind("<Button-1>", self.normal_min_dis_entry)
 
+        self.max_height = tk.StringVar()
+        tk.Label(self.labelframe2, text="Max. no. of output drug:").grid(row=1, column=0, padx=(22, 5), pady=5)
+        self.maxHeightEntry = ttk.Combobox(self.labelframe2, values=[x for x in range(1,4)],
+                                           textvariable=self.max_height, width="10")
+        self.maxHeightEntry.grid(row=1, column=1, pady=5)
+        self.maxHeightEntry.current(2)
+
+
+
+        ################################
+        # Result Labelframe
         self.labelframe3 = tk.LabelFrame(root, text="Result")
         self.labelframe3.pack(side='top', fill="both", expand="yes", ipadx=5, padx=5, pady=5)
 
@@ -104,7 +115,9 @@ class Application:
         self.SaveButton = tk.Button(self.labelframe3, text="Save", width=15, command=self.file_save).grid(row=1, column=3, padx=10)
         tk.Button(self.labelframe3, text="Clear", width=15, command=self.clear_result).grid(row=2, column=3, padx=10)
 
-        self.StatusBar = tk.Label(self.root, text="", bd=1, relief=tk.SUNKEN, anchor=tk.W)
+       ############################
+        # StatusBar
+        self.StatusBar = tk.Label(self.root, text="", bd=1, fg="red", relief=tk.SUNKEN, anchor=tk.W)
         self.StatusBar.pack(side=tk.BOTTOM, fill=tk.X)
         self.root.bind("<Button-1>", self.reset_status)
 
@@ -186,28 +199,37 @@ class Application:
         self.StatusBar["text"] = ""
 
     def calculate(self):
+
+        if len(self.druglist.get(0, "end")) == 0:
+            self.StatusBar["text"] = "Missing input drug list"
+            return
         #get parameter value
         if self.radioValue.get():
+            if self.minDisEntry.get() == "":
+                self.StatusBar["text"] = "Missing parameter"
+                return
             minDis = float(self.minDisEntry.get())
         else:
             minDis = len(self.druglist.get(0, "end"))
         self.resultlist.insert("end", "Original Drug list: "+str(self.druglist.get(0, "end")))
         self.resultlist.insert("end", "Allergy Drug list: "+str(self.allergylist.get(0, "end")))
         self.resultlist.insert("end", "Result:")
+        self.StatusBar["text"] = "Calculating..."
+        start_time = time.time()
         calculate_list = self.function(self.druglist.get(0, "end"),
                                        self.allergylist.get(0, "end"),
                                        self.inputlist,
-                                       minDis)
+                                       minDis,
+                                       int(self.max_height.get()))
 
         output = {k: v for k, v in sorted(calculate_list.items(), key=lambda item: item[1])}
         #output_formula
+        if len(output) == 0:
+            self.resultlist.insert("end", "No suitable drugs combination in database")
+
         for key, item in output.items():
             self.resultlist.insert("end", "Formula:  " + key + "   Distance:  " + str(item))
-
-
-        # for line in calculate_list:
-        #     self.resultlist.insert("end",  line)
         self.resultlist.insert("end", "")
-        self.StatusBar["text"] = "Result"
+        self.StatusBar["text"] = "Result (in "+str(time.time() - start_time) + "s)"
 
 
